@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>录音暂存和下载</title>
+    <style>
+        /* 添加一些基本的样式 */
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #recordingList {
+            list-style-type: none;
+            padding: 0;
+        }
+        #recordingList li {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>录音暂存和下载</h1>
+    
+    <!-- 录音控件 -->
+    <div>
+        <button id="startRecording">开始录音</button>
+        <button id="stopRecording" disabled>停止录音</button>
+    </div>
+
+    <!-- 录音列表 -->
+    <ul id="recordingList"></ul>
+
+    <!-- 下载按钮 -->
+    <button id="downloadRecordings" disabled>下载录音</button>
+
+    <script>
+        // 使用MediaRecorder API来录音
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordings = [];
+
+        const startRecordingButton = document.getElementById('startRecording');
+        const stopRecordingButton = document.getElementById('stopRecording');
+        const recordingList = document.getElementById('recordingList');
+        const downloadRecordingsButton = document.getElementById('downloadRecordings');
+
+        startRecordingButton.addEventListener('click', () => {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = event => {
+                        if (event.data.size > 0) {
+                            audioChunks.push(event.data);
+                        }
+                    };
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        const li = document.createElement('li');
+                        const audio = document.createElement('audio');
+                        const downloadButton = document.createElement('a');
+                        const deleteButton = document.createElement('button');
+                        
+                        audio.controls = true;
+                        audio.src = audioUrl;
+                        
+                        downloadButton.href = audioUrl;
+                        downloadButton.download = `${recordings.length}.wav`;
+                        downloadButton.textContent = `下载录音 ${recordings.length}`;
+                        
+                        deleteButton.textContent = '删除录音';
+                        deleteButton.addEventListener('click', () => {
+                            recordings.splice(recordings.length - 1, 1);
+                            li.remove();
+                            if (recordings.length === 0) {
+                                downloadRecordingsButton.disabled = true;
+                            }
+                        });
+                        
+                        li.appendChild(audio);
+                        li.appendChild(downloadButton);
+                        li.appendChild(deleteButton);
+                        
+                        recordingList.appendChild(li);
+                        recordings.push(audioBlob);
+                        audioChunks = [];
+                        
+                        if (recordings.length > 0) {
+                            downloadRecordingsButton.disabled = false;
+                        }
+                    };
+
+                    mediaRecorder.start();
+                    startRecordingButton.disabled = true;
+                    stopRecordingButton.disabled = false;
+                })
+                .catch(error => {
+                    console.error('获取麦克风权限失败：', error);
+                });
+        });
+
+        stopRecordingButton.addEventListener('click', () => {
+            mediaRecorder.stop();
+            startRecordingButton.disabled = false;
+            stopRecordingButton.disabled = true;
+        });
+
+        downloadRecordingsButton.addEventListener('click', () => {
+            const zip = new JSZip();
+            
+            recordings.forEach((recording, index) => {
+                const filename = `${index}.wav`;
+                zip.file(filename, recording);
+            });
+            
+            zip.generateAsync({ type: 'blob' })
+                .then(blob => {
+                    saveAs(blob, 'recordings.zip');
+                });
+        });
+    </script>
+    <!-- 引入JSZip和FileSaver.js库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</body>
+</html>
